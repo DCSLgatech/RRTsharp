@@ -26,7 +26,7 @@ The following must be installed to use this code.
  - Boost (OMPL prerequisite)
  - CMake (cross-platform build)
  - Python (to use plotpath.py simple visualizer)
-	 - MATLAB or any other tool listed at [the OMPL path visualization page](http://ompl.kavrakilab.org/pathVisualization.html/) may be used to view the "solution.txt" file instead
+	 - MATLAB or any other tool listed at [the OMPL path visualization page](http://ompl.kavrakilab.org/pathVisualization.html) may be used to view the "solution.txt" file instead
  - OpenMP is not used in the current version, but it is found if installed in case future versions are multithreaded
 
 ----------
