@@ -1,6 +1,6 @@
 # Kamil Saigol
 # CMakeLists.txt template for standalone planner development with system-installed OMPL
-# Requirements: OMPL, Boost (1.48 or higher), OpenMP (optional)
+# Requirements: OMPL, Boost (1.54 or higher), OpenMP (optional)
 
 cmake_minimum_required(VERSION 3.3)
 project(RRTsharp)
@@ -12,7 +12,7 @@ set(SOURCE_FILES main.cpp RRTsharp.h RRTsharp.cpp)
 add_executable(RRTsharp ${SOURCE_FILES})
 
 ### Boost ###
-find_package(Boost 1.48 COMPONENTS thread REQUIRED)
+find_package(Boost 1.54 COMPONENTS thread REQUIRED)
 if(Boost_FOUND)
     message(STATUS "Boost Include Directory: ${Boost_INCLUDE_DIRS}")
     message(STATUS "Boost Library Directory: ${Boost_LIBRARY_DIRS}")
@@ -22,7 +22,7 @@ if(Boost_FOUND)
     target_include_directories(RRTsharp PUBLIC ${Boost_INCLUDE_DIRS})
     target_link_libraries(RRTsharp ${Boost_LIBRARIES})
 else()
-    message(FATAL_ERROR "Boost >= 1.48 Not Found or Boost.Thread Library Not Found")
+    message(FATAL_ERROR "Boost >= 1.54 Not Found or Boost.Thread Library Not Found")
 endif()
 
 ### OMPL ###
