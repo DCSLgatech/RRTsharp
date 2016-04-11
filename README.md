@@ -43,6 +43,7 @@ Clone the repository
 
 Make a build directory and change to it
 
+    cd RRTsharp
     mkdir build
     cd build
 
