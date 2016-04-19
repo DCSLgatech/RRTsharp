@@ -39,7 +39,7 @@ First, ensure that the required software listed above is installed.  Then:
 
 Clone the repository
 
-    git clone https://github.gatech.edu/ksaigol3/RRTsharp.git
+    git clone https://github.gatech.edu/DCSL/RRTsharp.git
 
 Make a build directory and change to it
 
