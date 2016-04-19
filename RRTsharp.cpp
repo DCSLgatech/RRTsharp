@@ -7,6 +7,7 @@
 #include "ompl/tools/config/SelfConfig.h"
 #include "ompl/base/objectives/PathLengthOptimizationObjective.h"
 #include "ompl/tools/config/MagicConstants.h"
+#include "ompl/util/GeometricEquations.h"
 
 #include <boost/math/constants/constants.hpp>
 #include <boost/bind.hpp>
@@ -20,8 +21,9 @@ ompl::RRTsharp::RRTsharp(const ompl::base::SpaceInformationPtr &si)
   goalBias_(0.05),
   maxDistance_(0.0),
   lastGoalMotion_(NULL),
-  radiusMultiplier_(1.1),
-  q_(motion_compare(opt_))
+  multiplier_(1.1),
+  q_(motion_compare(opt_)),
+  knn_(false)
 {
     specs_.approximateSolutions = true;
     specs_.directed = true;
@@ -31,7 +33,8 @@ ompl::RRTsharp::RRTsharp(const ompl::base::SpaceInformationPtr &si)
 
     ompl::base::Planner::declareParam<double>("range", this, &RRTsharp::setRange, &RRTsharp::getRange, "0.:1.:10000.");
     ompl::base::Planner::declareParam<double>("goal_bias", this, &RRTsharp::setGoalBias, &RRTsharp::getGoalBias, "0.:.05:1.");
-    ompl::base::Planner::declareParam<double>("radius_multiplier", this, &RRTsharp::setRadiusMultiplier, &RRTsharp::getRadiusMultiplier, "0.1:0.05:50.");
+    ompl::base::Planner::declareParam<double>("multiplier", this, &RRTsharp::setMultiplier, &RRTsharp::getMultiplier, "0.1:0.05:50.");
+    ompl::base::Planner::declareParam<bool>("use_kNN_search", this, &RRTsharp::setKnn, &RRTsharp::getKnn, "0,1");
 
     addPlannerProgressProperty("iterations INTEGER", boost::bind(&RRTsharp::numIterationsProperty, this));
     addPlannerProgressProperty("best cost REAL", boost::bind(&RRTsharp::bestCostProperty, this));
@@ -152,7 +155,7 @@ ompl::RRTsharp::solve(const ompl::base::PlannerTerminationCondition &ptc)
     // distance between states - the intial state and the interpolated state (may be the same)
     double rDistance;
 
-    // Create random motion and a pointer (for optimization) to its state
+    // Create random motion and a pointer to its state
     Motion *mrand   = new Motion(si_);
     Motion *mnearest;
 
@@ -235,11 +238,19 @@ ompl::RRTsharp::solve(const ompl::base::PlannerTerminationCondition &ptc)
         // storage for a set of nearest neighbors
         std::vector<Motion*> Xnear;
 
-        // radius within which to fetch neighbors
-        double radius = calculateRadius(si_->getStateDimension(), nn_->size());
+        if(!knn_)
+        {
+            // radius within which to fetch neighbors
+            double radius = calculateRadius(si_->getStateDimension(), nn_->size());
 
-        // nearest neighbors in radius
-        nn_->nearestR(mnew, radius, Xnear);
+            // nearest neighbors in radius
+            nn_->nearestR(mnew, radius, Xnear);
+        }
+        else
+        {
+            unsigned int k = calculateKnn(nn_->size());
+            nn_->nearestK(mnew, k, Xnear);
+        }
 
         // VII. foreach(xnear in Xnear)
         for(int xnear = 0; xnear < Xnear.size(); ++xnear)
@@ -441,22 +452,19 @@ ompl::RRTsharp::key_type ompl::RRTsharp::key(Motion *x) const
     return std::make_pair(k1, x->lmc);
 }
 
-double ompl::RRTsharp::calculateUnitBallVolume(const unsigned int dimension) const
+unsigned int ompl::RRTsharp::calculateKnn(const unsigned int nsize) const
 {
-    if (dimension == 0)
-        return 1.0;
-    else if (dimension == 1)
-        return 2.0;
-    return 2.0 * boost::math::constants::pi<double>() / dimension
-           * calculateUnitBallVolume(dimension - 2);
+    return std::ceil(multiplier_
+                     * (boost::math::constants::e<double>() + (boost::math::constants::e<double>() / static_cast<double>(si_->getStateDimension())))
+                     * std::log(static_cast<double>(nsize + 1u)));
 }
 
 double ompl::RRTsharp::calculateRadius(const unsigned int dimension, const unsigned int n) const
 {
     double a = 1.0 / (double)dimension;
-    double unitBallVolume = calculateUnitBallVolume(dimension);
+    double unitBallVolume = ompl::unitNBallMeasure(dimension);
 
-    return radiusMultiplier_ * 2.0 * std::pow(a, a) * std::pow(freeSpaceVolume_ / unitBallVolume, a) * std::pow(std::log((double)n) / (double)n, a);
+    return multiplier_ * 2.0 * std::pow(a, a) * std::pow(freeSpaceVolume_ / unitBallVolume, a) * std::pow(std::log((double)n) / (double)n, a);
 }
 
 double ompl::RRTsharp::distanceFunction(const Motion *a, const Motion *b) const

@@ -19,6 +19,7 @@ namespace ompl {
 class RRTsharp: public base::Planner
 {
     friend class motion_compare;
+
 public:
     RRTsharp(const base::SpaceInformationPtr &si);
     virtual ~RRTsharp();
@@ -64,16 +65,26 @@ public:
         return bestCost_;
     }
 
-    void setRadiusMultiplier(const double radiusMultiplier)
+    bool getKnn() const
     {
-        if (radiusMultiplier <= 0.0)
-            throw Exception("Radius multiplier must be greater than zero");
-        radiusMultiplier_ = radiusMultiplier;
+        return knn_;
     }
 
-    double getRadiusMultiplier() const
+    void setKnn(bool knn)
     {
-        return radiusMultiplier_;
+        knn_ = knn;
+    }
+
+    void setMultiplier(const double multiplier)
+    {
+        if (multiplier <= 0.0)
+            throw Exception("Multiplier must be greater than zero");
+        multiplier_ = multiplier;
+    }
+
+    double getMultiplier() const
+    {
+        return multiplier_;
     }
 
 protected:
@@ -122,8 +133,8 @@ protected:
     void updateQueue(Motion *x);
     key_type key(Motion *x) const;
     base::Cost heuristicValue(Motion *v) const;
-    double calculateUnitBallVolume(const unsigned int dimension) const;
     double calculateRadius(const unsigned int dimension, const unsigned int n) const;
+    unsigned int calculateKnn(const unsigned int nsize) const;
 
     double distanceFunction(const Motion *a, const Motion *b) const;
     void freeMemory();
@@ -138,9 +149,10 @@ protected:
     unsigned int                                    iterations_;
     base::Cost                                      bestCost_;
     base::OptimizationObjectivePtr                  opt_;
-    double                                          radiusMultiplier_;
+    double                                          multiplier_;
     double                                          freeSpaceVolume_;
     boost::heap::fibonacci_heap< Motion*, boost::heap::compare<motion_compare> > q_;
+    bool                                            knn_;
 
     std::string numIterationsProperty() const
     {
