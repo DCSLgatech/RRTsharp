@@ -10,10 +10,11 @@
 #include "ompl/util/GeometricEquations.h"
 
 #include <boost/math/constants/constants.hpp>
-#include <boost/bind.hpp>
 
 #include <algorithm>
 #include <cmath>
+// cpp11
+#include <functional>
 #include <limits>
 
 ompl::RRTsharp::RRTsharp(const ompl::base::SpaceInformationPtr &si)
@@ -35,6 +36,8 @@ ompl::RRTsharp::RRTsharp(const ompl::base::SpaceInformationPtr &si)
     ompl::base::Planner::declareParam<double>("goal_bias", this, &RRTsharp::setGoalBias, &RRTsharp::getGoalBias, "0.:.05:1.");
     ompl::base::Planner::declareParam<double>("multiplier", this, &RRTsharp::setMultiplier, &RRTsharp::getMultiplier, "0.1:0.05:50.");
     ompl::base::Planner::declareParam<bool>("use_kNN_search", this, &RRTsharp::setKnn, &RRTsharp::getKnn, "0,1");
+    ompl::base::Planner::declareParam<Variant>("variant", this, &RRTsharp::setVariant, &RRTsharp::getVariant,
+                                               "<RRTsharpOrig>, <RRTsharpV1>, <RRTsharpV2>, <RRTsharpV3>");
 
     addPlannerProgressProperty("iterations INTEGER", boost::bind(&RRTsharp::numIterationsProperty, this));
     addPlannerProgressProperty("best cost REAL", boost::bind(&RRTsharp::bestCostProperty, this));
@@ -90,7 +93,8 @@ void ompl::RRTsharp::setup()
         nn_.reset(tools::SelfConfig::getDefaultNearestNeighbors<Motion *>(this));
     }
 
-    nn_->setDistanceFunction(boost::bind(&RRTsharp::distanceFunction, this, _1, _2));
+    // cpp11
+    nn_->setDistanceFunction(std::bind(&RRTsharp::distanceFunction, this, std::placeholders::_1, std::placeholders::_2));
 
     bestCost_ = opt_->infiniteCost();
     bestMotion_ = NULL;
@@ -146,7 +150,7 @@ ompl::RRTsharp::solve(const ompl::base::PlannerTerminationCondition &ptc)
     // solution
     Motion *solution  = NULL;
 
-    // approximate solution, returned if no exact solution found
+    // approximate solution returned if no exact solution found
     Motion *approxSolution = NULL;
 
     // distance from goal to closest solution yet found
@@ -155,7 +159,7 @@ ompl::RRTsharp::solve(const ompl::base::PlannerTerminationCondition &ptc)
     // distance between states - the intial state and the interpolated state (may be the same)
     double rDistance;
 
-    // Create random motion and a pointer to its state
+    // Create random motion and motion representing nn
     Motion *mrand   = new Motion(si_);
     Motion *mnearest;
 
@@ -164,16 +168,16 @@ ompl::RRTsharp::solve(const ompl::base::PlannerTerminationCondition &ptc)
     // Random state
     ompl::base::State *xrand = mrand->state;
 
-    // The new state that is generated between states *to* and *from*
-    ompl::base::State *interpolatedState = si_->allocState(); // Allocates "space information"-sized memory for a state
+    // New interpolated state
+    ompl::base::State *interpolatedState = si_->allocState();
 
-    // The chosen state by steering
+    // State resulting from steering
     ompl::base::State *xnew;
 
     // Key comparator
     key_compare kc(opt_);
 
-    // Begin sampling --------------------------------------------------------------------------------------
+    // ----- Begin sampling -----
     while (ptc() == false)
     {
         iterations_++;
@@ -206,8 +210,7 @@ ompl::RRTsharp::solve(const ompl::base::PlannerTerminationCondition &ptc)
         // Check if the rand_state is too far away
         if (rDistance > maxDistance_)
         {
-            // Computes the state that lies at time t in [0, 1] on the segment that connects *from* state to *to* state.
-            // The memory location of *state* is not required to be different from the memory of either *from* or *to*.
+            // Interpolate state
             si_->getStateSpace()->interpolate(mnearest->state, xrand,
                                               maxDistance_ / rDistance, interpolatedState);
 
@@ -231,7 +234,7 @@ ompl::RRTsharp::solve(const ompl::base::PlannerTerminationCondition &ptc)
         Motion *mnew = new Motion(si_);
         si_->copyState(mnew->state, xnew);
 
-        initialize(mnew, mnearest);
+        initialize(mnew, nullptr); // cpp11
 
         // VI. Xnear = Near(xnew, |V|)
 
@@ -253,7 +256,7 @@ ompl::RRTsharp::solve(const ompl::base::PlannerTerminationCondition &ptc)
         }
 
         // VII. foreach(xnear in Xnear)
-        for(int xnear = 0; xnear < Xnear.size(); ++xnear)
+        for(std::size_t xnear = 0; xnear < Xnear.size(); ++xnear)
         {
             Motion *mnear = Xnear.at(xnear);
 
@@ -277,8 +280,12 @@ ompl::RRTsharp::solve(const ompl::base::PlannerTerminationCondition &ptc)
             mnew->children.push_back(mnear);
         }
 
+        // Dynamic Programming Guided Exploration
+        bool to_include = includeVertex(mnew);
+
         // VIII. Add motion
-        nn_->add(mnew);
+        if(to_include) nn_->add(mnew);
+        else continue; // try a new sample
 
         // IX. UpdateQueue(xnew)
         updateQueue(mnew);
@@ -339,7 +346,7 @@ ompl::RRTsharp::solve(const ompl::base::PlannerTerminationCondition &ptc)
         }
     }
 
-    // Finish solution processing --------------------------------------------------------------------
+    // ----- Finish solution processing -----
 
     bool solved = false;
     bool approximate = false;
@@ -373,7 +380,7 @@ ompl::RRTsharp::solve(const ompl::base::PlannerTerminationCondition &ptc)
         solved = true;
     }
 
-    // Clean up ---------------------------------------------------------------------------------------
+    // ----- Clean up -----
 
     si_->freeState(interpolatedState);
     if (mrand->state)
@@ -383,6 +390,33 @@ ompl::RRTsharp::solve(const ompl::base::PlannerTerminationCondition &ptc)
     OMPL_INFORM("%s: Created %u states", getName().c_str(), nn_->size());
 
     return ompl::base::PlannerStatus(solved, approximate);
+}
+
+bool ompl::RRTsharp::includeVertex(const Motion *x) const
+{
+    static key_compare kc(opt_);
+    switch(getVariant())
+    {
+        case RRTsharpV1:
+        {
+            return (opt_->isCostBetterThan(x->key.first,  opt_->infiniteCost()) &&
+                    opt_->isCostBetterThan(x->key.second, opt_->infiniteCost()));
+            break;
+        }
+        case RRTsharpV2:
+        {
+            return kc(x->parent->key, bestMotion_->key);
+            break;
+        }
+        case RRTsharpV3:
+        {
+            return kc(x->parent->key, bestMotion_->key);
+            break;
+        }
+        default: // assume RRTsharpOrig
+            return true;
+            break;
+    }
 }
 
 void ompl::RRTsharp::clear()
@@ -407,16 +441,12 @@ void ompl::RRTsharp::clear()
 void ompl::RRTsharp::initialize(Motion *x, Motion *x_pr)
 {
     x->g = opt_->infiniteCost();
-    if(!x_pr)
-    {
-        x->lmc = opt_->infiniteCost();
-        x->parent = NULL;
-    }
-    else
+    x->lmc = opt_->infiniteCost();
+    x->parent = x_pr;
+    if(x_pr)
     {
         x->c = opt_->motionCost(x_pr->state, x->state);
         x->lmc = opt_->combineCosts(x_pr->g, x->c);
-        x->parent = x_pr;
         x_pr->children.push_back(x);
     }
 }
@@ -455,8 +485,8 @@ ompl::RRTsharp::key_type ompl::RRTsharp::key(Motion *x) const
 unsigned int ompl::RRTsharp::calculateKnn(const unsigned int nsize) const
 {
     return std::ceil(multiplier_
-                     * (boost::math::constants::e<double>() + (boost::math::constants::e<double>() / static_cast<double>(si_->getStateDimension())))
-                     * std::log(static_cast<double>(nsize + 1u)));
+             * (boost::math::constants::e<double>() + (boost::math::constants::e<double>() / static_cast<double>(si_->getStateDimension())))
+             * std::log(static_cast<double>(nsize + 1u)));
 }
 
 double ompl::RRTsharp::calculateRadius(const unsigned int dimension, const unsigned int n) const

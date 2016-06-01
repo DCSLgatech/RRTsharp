@@ -11,6 +11,7 @@
 
 #include <boost/heap/fibonacci_heap.hpp>
 
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -87,6 +88,17 @@ public:
         return multiplier_;
     }
 
+    enum Variant { RRTsharpOrig = 0, RRTsharpV1, RRTsharpV2, RRTsharpV3 };
+    void setVariant(const Variant variant)
+    {
+        variant_ = variant;
+    }
+
+    Variant getVariant() const
+    {
+        return variant_;
+    }
+
 protected:
     // Key type
     typedef std::pair<base::Cost, base::Cost> key_type;
@@ -99,7 +111,8 @@ protected:
         {
             return opt->isCostBetterThan(k1.first, k2.first) ||
                    (opt->isCostEquivalentTo(k1.first, k2.first) &&
-                    (opt->isCostBetterThan(k1.second, k2.second) || opt->isCostEquivalentTo(k1.second, k2.second)));
+                    (opt->isCostBetterThan(k1.second, k2.second) ||
+                     opt->isCostEquivalentTo(k1.second, k2.second)));
         }
 
         base::OptimizationObjectivePtr &opt;
@@ -135,12 +148,13 @@ protected:
     base::Cost heuristicValue(Motion *v) const;
     double calculateRadius(const unsigned int dimension, const unsigned int n) const;
     unsigned int calculateKnn(const unsigned int nsize) const;
+    bool includeVertex(const Motion *x) const;
 
     double distanceFunction(const Motion *a, const Motion *b) const;
     void freeMemory();
 
     base::StateSamplerPtr                           sampler_;
-    boost::shared_ptr< NearestNeighbors<Motion*> >  nn_;
+    std::shared_ptr<NearestNeighbors<Motion*>>      nn_; // cpp11
     double                                          goalBias_;
     double                                          maxDistance_;
     RNG                                             rng_;
@@ -153,6 +167,7 @@ protected:
     double                                          freeSpaceVolume_;
     boost::heap::fibonacci_heap< Motion*, boost::heap::compare<motion_compare> > q_;
     bool                                            knn_;
+    Variant                                         variant_;
 
     std::string numIterationsProperty() const
     {

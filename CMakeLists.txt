@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 3.3)
 project(RRTsharp)
 
 ### There is no official support for C++11 from OMPL at the moment ###
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 set(SOURCE_FILES main.cpp RRTsharp.h RRTsharp.cpp)
 add_executable(RRTsharp ${SOURCE_FILES})
