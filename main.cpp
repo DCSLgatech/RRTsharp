@@ -91,7 +91,7 @@ void plan(std::ofstream &out)
     ob::SpaceInformationPtr si(new ob::SpaceInformation(space));
 
     // set state validity checking for this space
-    si->setStateValidityChecker(boost::bind(&isStateValid, _1));
+    si->setStateValidityChecker(std::bind(&isStateValid, std::placeholders::_1));
 
     // create a random start state
     ob::ScopedState<> start(space);
@@ -109,6 +109,7 @@ void plan(std::ofstream &out)
 
     // create a planner for the defined space
     ob::PlannerPtr planner(new ompl::RRTsharp(si));
+    planner->params().setParam("variant", "2");
 
     // set the problem we are trying to solve for the planner
     planner->setProblemDefinition(pdef);

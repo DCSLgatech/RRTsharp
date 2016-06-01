@@ -88,13 +88,14 @@ public:
         return multiplier_;
     }
 
-    enum Variant { RRTsharpOrig = 0, RRTsharpV1, RRTsharpV2, RRTsharpV3 };
-    void setVariant(const Variant variant)
+    void setVariant(const int variant)
     {
+        if(variant < 0 || variant > 3)
+            throw Exception("Variant must be 0 (original RRT#) or in [0, 3]");
         variant_ = variant;
     }
 
-    Variant getVariant() const
+    int getVariant() const
     {
         return variant_;
     }
@@ -106,7 +107,7 @@ protected:
     // Key comparison functor
     struct key_compare
     {
-        key_compare(base::OptimizationObjectivePtr &opt) : opt(opt) {}
+        key_compare(const base::OptimizationObjectivePtr &opt) : opt(opt) {}
         bool operator()(const key_type &k1, const key_type &k2) const
         {
             return opt->isCostBetterThan(k1.first, k2.first) ||
@@ -115,7 +116,7 @@ protected:
                      opt->isCostEquivalentTo(k1.second, k2.second)));
         }
 
-        base::OptimizationObjectivePtr &opt;
+        const base::OptimizationObjectivePtr &opt;
     };
 
     struct Motion;
@@ -167,7 +168,7 @@ protected:
     double                                          freeSpaceVolume_;
     boost::heap::fibonacci_heap< Motion*, boost::heap::compare<motion_compare> > q_;
     bool                                            knn_;
-    Variant                                         variant_;
+    int                                             variant_;
 
     std::string numIterationsProperty() const
     {

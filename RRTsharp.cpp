@@ -36,8 +36,7 @@ ompl::RRTsharp::RRTsharp(const ompl::base::SpaceInformationPtr &si)
     ompl::base::Planner::declareParam<double>("goal_bias", this, &RRTsharp::setGoalBias, &RRTsharp::getGoalBias, "0.:.05:1.");
     ompl::base::Planner::declareParam<double>("multiplier", this, &RRTsharp::setMultiplier, &RRTsharp::getMultiplier, "0.1:0.05:50.");
     ompl::base::Planner::declareParam<bool>("use_kNN_search", this, &RRTsharp::setKnn, &RRTsharp::getKnn, "0,1");
-    ompl::base::Planner::declareParam<Variant>("variant", this, &RRTsharp::setVariant, &RRTsharp::getVariant,
-                                               "<RRTsharpOrig>, <RRTsharpV1>, <RRTsharpV2>, <RRTsharpV3>");
+    ompl::base::Planner::declareParam<int>("variant", this, &RRTsharp::setVariant, &RRTsharp::getVariant, "0:3");
 
     addPlannerProgressProperty("iterations INTEGER", boost::bind(&RRTsharp::numIterationsProperty, this));
     addPlannerProgressProperty("best cost REAL", boost::bind(&RRTsharp::bestCostProperty, this));
@@ -397,23 +396,25 @@ bool ompl::RRTsharp::includeVertex(const Motion *x) const
     static key_compare kc(opt_);
     switch(getVariant())
     {
-        case RRTsharpV1:
+        case 1:
         {
             return (opt_->isCostBetterThan(x->key.first,  opt_->infiniteCost()) &&
                     opt_->isCostBetterThan(x->key.second, opt_->infiniteCost()));
             break;
         }
-        case RRTsharpV2:
+        case 2:
         {
-            return kc(x->parent->key, bestMotion_->key);
+            if(x->parent)
+                return kc(x->parent->key, bestMotion_->key);
+            else return true; // when no parent assigned
             break;
         }
-        case RRTsharpV3:
+        case 3:
         {
-            return kc(x->parent->key, bestMotion_->key);
+            return kc(x->key, bestMotion_->key);
             break;
         }
-        default: // assume RRTsharpOrig
+        default: // assume 0
             return true;
             break;
     }
